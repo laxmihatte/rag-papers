@@ -1,0 +1,10 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Our vector store (regenerated from PDFs)
+index/
+
+# Mac
+.DS_Store
