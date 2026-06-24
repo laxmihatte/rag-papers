@@ -1,3 +1,4 @@
 ollama
 pypdf
 numpy
+flask
