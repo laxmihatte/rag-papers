@@ -1,48 +1,58 @@
+---
+title: RAG Papers
+emoji: 📄
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+app_file: app.py
+pinned: false
+---
+
 # rag-papers
 
-A minimal, fully-local **RAG** (retrieval-augmented generation) over a set of ML papers.
-No API keys — everything runs on [Ollama](https://ollama.com).
+A minimal **RAG** (retrieval-augmented generation) over a set of ML papers, built to
+deploy **free and always-on** on [Hugging Face Spaces](https://huggingface.co/spaces).
 
-- **Embeddings:** `nomic-embed-text`
-- **Generation:** `llama3.2`
-- **Vector store:** a plain NumPy array (cosine similarity), no database needed.
+- **Embeddings:** `all-MiniLM-L6-v2` (sentence-transformers) — runs in-process, no API key.
+- **Generation:** `llama-3.1-8b-instant` on [Groq](https://groq.com)'s free API.
+- **Vector store:** a plain NumPy array (cosine similarity), no database.
 
-## Setup
+The block of `---` metadata at the top of this file is what Hugging Face reads to
+configure the Space (Gradio app, entry point `app.py`).
+
+## Run locally
 
 ```bash
-# 1. Install Ollama and pull the models
-ollama pull nomic-embed-text
-ollama pull llama3.2
-
-# 2. Python deps
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-```
+export GROQ_API_KEY=...        # free key from https://console.groq.com
 
-## Use
-
-```bash
-# Build the index from PDFs in papers/ (writes to index/)
-python ingest.py
-
-# Ask questions
+python app.py                  # web UI at http://127.0.0.1:7860
+# or
 python ask.py "What is multi-head attention?"
-python ask.py            # interactive
 ```
+
+The index is built automatically on first run (from the PDFs in `papers/`).
+
+## Deploy free on Hugging Face Spaces
+
+See [DEPLOY.md](DEPLOY.md). Short version: create a Gradio Space, push this repo to
+it, and add `GROQ_API_KEY` as a Space secret. You get a public URL like
+`https://<user>-rag-papers.hf.space`.
 
 ## How it works
 
-1. `ingest.py` reads each PDF (`pypdf`), splits it into overlapping word chunks,
-   embeds them, and saves unit-normalized vectors + chunk text to `index/`.
-2. `ask.py` embeds your question, ranks chunks by cosine similarity, and feeds the
-   top matches to the LLM as grounding context with source citations.
+1. Each PDF is read (`pypdf`), split into overlapping word chunks, and embedded into
+   unit vectors saved in `index/`.
+2. A question is embedded the same way; chunks are ranked by cosine similarity
+   (`vectors @ q`); the top matches are handed to the LLM as cited context.
 
 ## Layout
 
 ```
 papers/        source PDFs
-rag/core.py    PDF reading, chunking, embedding
-ingest.py      build the index
-ask.py         query the index
-index/          generated vector store (git-ignored)
+rag/core.py    PDF reading, chunking, embedding, retrieval, generation
+ingest.py      build the index (optional; the app does it on startup)
+ask.py         command-line Q&A
+app.py         Gradio web UI (Hugging Face Spaces entry point)
 ```

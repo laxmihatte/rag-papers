@@ -1,4 +1,5 @@
-ollama
-pypdf
 numpy
-flask
+pypdf
+sentence-transformers
+groq
+gradio

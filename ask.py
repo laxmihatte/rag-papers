@@ -1,4 +1,4 @@
-"""Ask a question against the indexed papers.
+"""Ask a question against the indexed papers from the command line.
 
 Usage:
     python ask.py "What is multi-head attention?"
@@ -7,60 +7,28 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import sys
-from pathlib import Path
 
-import numpy as np
-import ollama
-
-from rag.core import CHAT_MODEL, embed
-
-INDEX_DIR = Path("index")
-TOP_K = 4
-
-
-def load_index() -> tuple[np.ndarray, list[str], list[dict]]:
-    if not (INDEX_DIR / "vectors.npy").exists():
-        raise SystemExit("No index found. Run `python ingest.py` first.")
-    vectors = np.load(INDEX_DIR / "vectors.npy")
-    data = json.loads((INDEX_DIR / "chunks.json").read_text())
-    return vectors, data["chunks"], data["metadata"]
-
-
-def retrieve(question: str, vectors, chunks, metadata, k: int = TOP_K):
-    q = embed([question])[0]
-    scores = vectors @ q  # cosine similarity (vectors are unit-normalized)
-    top = np.argsort(scores)[::-1][:k]
-    return [(chunks[i], metadata[i], float(scores[i])) for i in top]
+from rag.core import (
+    TOP_K,
+    build_prompt,
+    ensure_index,
+    generate_stream,
+    retrieve,
+)
 
 
 def answer(question: str) -> None:
-    vectors, chunks, metadata = load_index()
-    hits = retrieve(question, vectors, chunks, metadata)
-
-    context = "\n\n".join(
-        f"[{i + 1}] (from {meta['source']})\n{chunk}"
-        for i, (chunk, meta, _) in enumerate(hits)
-    )
-    prompt = (
-        "Answer the question using only the context below. "
-        "Cite sources with their [number]. If the answer isn't in the context, say so.\n\n"
-        f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer:"
-    )
+    vectors, chunks, metadata = ensure_index()
+    hits = retrieve(question, vectors, chunks, metadata, TOP_K)
 
     print("\nRetrieved:")
     for i, (_, meta, score) in enumerate(hits):
         print(f"  [{i + 1}] {meta['source']} (chunk {meta['chunk']}, score {score:.3f})")
     print("\nAnswer:\n")
 
-    stream = ollama.chat(
-        model=CHAT_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        stream=True,
-    )
-    for part in stream:
-        print(part["message"]["content"], end="", flush=True)
+    for token in generate_stream(build_prompt(question, hits)):
+        print(token, end="", flush=True)
     print()
 
 
