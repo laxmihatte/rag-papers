@@ -6,6 +6,8 @@ launches automatically. The index is built on first startup if missing.
 
 from __future__ import annotations
 
+import os
+
 import gradio as gr
 
 from rag.core import TOP_K, build_prompt, ensure_index, generate_stream, retrieve
@@ -27,6 +29,10 @@ def respond(question: str):
         yield "", ""
         return
 
+    if not os.environ.get("GROQ_API_KEY"):
+        yield "", "⚠️ **GROQ_API_KEY is not set.** Add it in the Space's Settings → Secrets."
+        return
+
     hits = retrieve(question, VECTORS, CHUNKS, METADATA, TOP_K)
     sources = "\n".join(
         f"[{i + 1}] **{meta['source']}** (score {score:.2f})"
@@ -34,9 +40,12 @@ def respond(question: str):
     )
 
     answer = ""
-    for token in generate_stream(build_prompt(question, hits)):
-        answer += token
-        yield sources, answer
+    try:
+        for token in generate_stream(build_prompt(question, hits)):
+            answer += token
+            yield sources, answer
+    except Exception as e:  # surface the real error in the UI instead of failing silently
+        yield sources, f"⚠️ **Error generating answer:** {e}"
 
 
 with gr.Blocks(title="rag-papers") as demo:
@@ -51,4 +60,4 @@ with gr.Blocks(title="rag-papers") as demo:
     question.submit(respond, inputs=question, outputs=[sources, answer])
 
 if __name__ == "__main__":
-    demo.queue().launch()
+    demo.queue().launch(show_error=True)
